@@ -63,10 +63,15 @@ app.post('/withdraw', async (req, res) => {
   }
 });
 
-// Status check
+// Status check — no caching, always fresh
 app.get('/status/:uuid', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Pragma', 'no-cache');
   try {
-    const r = await axios.get(`${MARZPAY_BASE}/collect-money/${req.params.uuid}`, { headers: marzHeaders });
+    const url = `${MARZPAY_BASE}/collect-money/${req.params.uuid}?_t=${Date.now()}`;
+    const r = await axios.get(url, {
+      headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' },
+    });
     res.json(r.data);
   } catch (e) {
     res.json(e.response?.data ?? { status: 'error', message: e.message });
