@@ -34,7 +34,14 @@ const marzHeaders = {
 };
 
 // Health check
-app.get('/health', (_, res) => res.json({ status: 'ok' }));
+app.get('/health', async (_, res) => {
+  try {
+    const r = await axios.get('https://api.ipify.org?format=json');
+    res.json({ status: 'ok', outgoing_ip: r.data.ip });
+  } catch {
+    res.json({ status: 'ok' });
+  }
+});
 
 // Collect (deposit)
 app.post('/collect', async (req, res) => {
