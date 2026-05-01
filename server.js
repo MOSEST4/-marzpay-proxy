@@ -116,6 +116,84 @@ app.get('/phone-verification/subscription-status', async (req, res) => {
   }
 });
 
+// ─── Bill Payment Routes ─────────────────────────────────────────────────────
+
+// Get available services/utilities
+app.get('/bill-payment/services', async (req, res) => {
+  try {
+    const r = await axios.get(`${MARZPAY_BASE}/bill-payment/services`, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Get NWSC areas
+app.get('/bill-payment/nwsc/areas', async (req, res) => {
+  try {
+    const r = await axios.get(`${MARZPAY_BASE}/bill-payment/nwsc/areas`, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Get DSTV bouquet codes
+app.get('/bill-payment/dstv/bouquet-codes', async (req, res) => {
+  try {
+    const r = await axios.get(`${MARZPAY_BASE}/bill-payment/dstv/bouquet-codes`, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Get GOTV bouquet codes
+app.get('/bill-payment/gotv/bouquet-codes', async (req, res) => {
+  try {
+    const r = await axios.get(`${MARZPAY_BASE}/bill-payment/gotv/bouquet-codes`, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Verify meter/account number
+app.post('/bill-payment/verify', async (req, res) => {
+  try {
+    console.log('[BILL-VERIFY] Request:', JSON.stringify(req.body));
+    const r = await axios.post(`${MARZPAY_BASE}/bill-payment/verify`, req.body, { headers: marzHeaders });
+    console.log('[BILL-VERIFY] Response:', JSON.stringify(r.data));
+    res.json(r.data);
+  } catch (e) {
+    console.error('[BILL-VERIFY] Error:', e.message, e.response?.data);
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Initiate bill payment
+app.post('/bill-payment', async (req, res) => {
+  try {
+    console.log('[BILL-PAY] Request:', JSON.stringify(req.body));
+    const r = await axios.post(`${MARZPAY_BASE}/bill-payment`, req.body, { headers: marzHeaders });
+    console.log('[BILL-PAY] Response:', JSON.stringify(r.data));
+    res.json(r.data);
+  } catch (e) {
+    console.error('[BILL-PAY] Error:', e.message, e.response?.data);
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Get bill payment transaction by reference
+app.get('/bill-payment/:reference', async (req, res) => {
+  try {
+    const r = await axios.get(`${MARZPAY_BASE}/bill-payment/${req.params.reference}`, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
 // ─── Bank Transfer Routes ────────────────────────────────────────────────────
 
 // Get list of supported banks
