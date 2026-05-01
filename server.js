@@ -78,6 +78,44 @@ app.get('/status/:uuid', async (req, res) => {
   }
 });
 
+// ─── Phone Verification Routes ───────────────────────────────────────────────
+
+// Verify phone number and get registered name
+app.post('/phone-verification/verify', async (req, res) => {
+  try {
+    console.log('[PHONE-VERIFY] Request:', JSON.stringify(req.body, null, 2));
+    const r = await axios.post(`${MARZPAY_BASE}/phone-verification/verify`, req.body, { headers: marzHeaders });
+    console.log('[PHONE-VERIFY] Response:', JSON.stringify(r.data, null, 2));
+    res.json(r.data);
+  } catch (e) {
+    console.error('[PHONE-VERIFY] Error:', e.message);
+    if (e.response) {
+      console.error('[PHONE-VERIFY] Error response:', JSON.stringify(e.response.data, null, 2));
+    }
+    res.json(e.response?.data ?? { success: false, message: e.message });
+  }
+});
+
+// Get phone verification service info
+app.get('/phone-verification/service-info', async (req, res) => {
+  try {
+    const r = await axios.get(`${MARZPAY_BASE}/phone-verification/service-info`, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { success: false, message: e.message });
+  }
+});
+
+// Check phone verification subscription status
+app.get('/phone-verification/subscription-status', async (req, res) => {
+  try {
+    const r = await axios.get(`${MARZPAY_BASE}/phone-verification/subscription-status`, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { success: false, message: e.message });
+  }
+});
+
 // ─── Bank Transfer Routes ────────────────────────────────────────────────────
 
 // Get list of supported banks
@@ -93,9 +131,15 @@ app.get('/bank-transfer/banks', async (req, res) => {
 // Validate bank account
 app.post('/bank-transfer/validate', async (req, res) => {
   try {
+    console.log('[VALIDATE] Request:', JSON.stringify(req.body, null, 2));
     const r = await axios.post(`${MARZPAY_BASE}/bank-transfer/validate`, req.body, { headers: marzHeaders });
+    console.log('[VALIDATE] Response:', JSON.stringify(r.data, null, 2));
     res.json(r.data);
   } catch (e) {
+    console.error('[VALIDATE] Error:', e.message);
+    if (e.response) {
+      console.error('[VALIDATE] Error response:', JSON.stringify(e.response.data, null, 2));
+    }
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -113,9 +157,16 @@ app.get('/bank-transfer/services', async (req, res) => {
 // Create bank transfer
 app.post('/bank-transfer', async (req, res) => {
   try {
+    console.log('[BANK-TRANSFER] Request:', JSON.stringify(req.body, null, 2));
     const r = await axios.post(`${MARZPAY_BASE}/bank-transfer`, req.body, { headers: marzHeaders });
+    console.log('[BANK-TRANSFER] Response status:', r.status);
+    console.log('[BANK-TRANSFER] Response data:', JSON.stringify(r.data, null, 2));
     res.json(r.data);
   } catch (e) {
+    console.error('[BANK-TRANSFER] Error:', e.message);
+    if (e.response) {
+      console.error('[BANK-TRANSFER] Error response:', JSON.stringify(e.response.data, null, 2));
+    }
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
