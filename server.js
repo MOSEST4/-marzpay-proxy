@@ -128,19 +128,23 @@ app.get('/bank-transfer/banks', async (req, res) => {
   }
 });
 
-// Validate bank account
+// Validate bank account — log full raw response for debugging
 app.post('/bank-transfer/validate', async (req, res) => {
   try {
-    console.log('[VALIDATE] Request:', JSON.stringify(req.body, null, 2));
+    console.log('[VALIDATE] Request body:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/bank-transfer/validate`, req.body, { headers: marzHeaders });
-    console.log('[VALIDATE] Response:', JSON.stringify(r.data, null, 2));
+    console.log('[VALIDATE] HTTP status:', r.status);
+    console.log('[VALIDATE] Full response:', JSON.stringify(r.data, null, 2));
     res.json(r.data);
   } catch (e) {
     console.error('[VALIDATE] Error:', e.message);
     if (e.response) {
-      console.error('[VALIDATE] Error response:', JSON.stringify(e.response.data, null, 2));
+      console.error('[VALIDATE] HTTP status:', e.response.status);
+      console.error('[VALIDATE] Error body:', JSON.stringify(e.response.data, null, 2));
+      // Return the actual error response so the app can see it
+      return res.json(e.response.data);
     }
-    res.json(e.response?.data ?? { status: 'error', message: e.message });
+    res.json({ status: 'error', message: e.message });
   }
 });
 
