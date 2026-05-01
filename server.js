@@ -78,5 +78,62 @@ app.get('/status/:uuid', async (req, res) => {
   }
 });
 
+// ─── Bank Transfer Routes ────────────────────────────────────────────────────
+
+// Get list of supported banks
+app.get('/bank-transfer/banks', async (req, res) => {
+  try {
+    const r = await axios.get(`${MARZPAY_BASE}/bank-transfer/banks`, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Validate bank account
+app.post('/bank-transfer/validate', async (req, res) => {
+  try {
+    const r = await axios.post(`${MARZPAY_BASE}/bank-transfer/validate`, req.body, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Get bank transfer service settings
+app.get('/bank-transfer/services', async (req, res) => {
+  try {
+    const r = await axios.get(`${MARZPAY_BASE}/bank-transfer/services`, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Create bank transfer
+app.post('/bank-transfer', async (req, res) => {
+  try {
+    const r = await axios.post(`${MARZPAY_BASE}/bank-transfer`, req.body, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Check bank transfer status
+app.get('/bank-transfer/:reference', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  try {
+    const url = `${MARZPAY_BASE}/bank-transfer/${req.params.reference}?_t=${Date.now()}`;
+    const r = await axios.get(url, {
+      headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' },
+    });
+    res.json(r.data);
+  } catch (e) {
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`MarzPay proxy running on port ${PORT}`));
