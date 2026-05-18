@@ -23,6 +23,7 @@ app.use((req, res, next) => {
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   if (req.path === '/health') return next();
+  if (req.path === '/relworx/topup') return next(); // browser-accessible, no header needed
   const key = req.headers['x-proxy-key'];
   if (key !== PROXY_SECRET) return res.status(403).json({ status: 'error', message: 'Unauthorized' });
   next();
