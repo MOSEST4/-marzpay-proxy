@@ -8,7 +8,7 @@ const MARZPAY_AUTH  = 'bWFyel9TTmdZMHRwb1FVcFk1WmNoOndIRWdTT0lhUjhCUjNMMDV2NlZFU
 const PROXY_SECRET  = 'rutooma_agro_2025_proxy_key';
 
 const RELWORX_BASE  = 'https://payments.relworx.com/api';
-const RELWORX_KEY   = process.env.RELWORX_API_KEY || 'fa5bc086ef97db.RFg3yY3XNHUo27d1lhTXZA';
+const RELWORX_KEY   = process.env.RELWORX_API_KEY || 'e4d6b28b39d2cf.zfWf7ysq7Gyo7F3owgkSaw';
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
