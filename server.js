@@ -1,14 +1,16 @@
 const express = require('express');
 const axios = require('axios');
-
 const app = express();
 app.use(express.json());
 
-const MARZPAY_BASE = 'https://wallet.wearemarz.com/api/v1';
-const MARZPAY_AUTH = 'bWFyel9TTmdZMHRwb1FVcFk1WmNoOndIRWdTT0lhUjhCUjNMMDV2NlZFUHFzMTBOZFdNZzU4';
-const PROXY_SECRET = 'rutooma_agro_2025_proxy_key';
+const MARZPAY_BASE  = 'https://wallet.wearemarz.com/api/v1';
+const MARZPAY_AUTH  = 'bWFyel9TTmdZMHRwb1FVcFk1WmNoOndIRWdTT0lhUjhCUjNMMDV2NlZFUHFzMTBOZFdNZzU4';
+const PROXY_SECRET  = 'rutooma_agro_2025_proxy_key';
 
-// CORS
+const RELWORX_BASE  = 'https://payments.relworx.com/api';
+const RELWORX_KEY   = process.env.RELWORX_API_KEY || 'fa5bc086ef97db.RFg3yY3XNHUo27d1lhTXZA';
+
+// ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -18,7 +20,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Auth
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   if (req.path === '/health') return next();
   const key = req.headers['x-proxy-key'];
@@ -33,7 +35,13 @@ const marzHeaders = {
   'Cache-Control': 'no-cache',
 };
 
-// Health check
+const relworxHeaders = () => ({
+  'Accept': 'application/vnd.relworx.v2',
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${RELWORX_KEY}`,
+});
+
+// ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', async (_, res) => {
   try {
     const r = await axios.get('https://api.ipify.org?format=json');
@@ -43,7 +51,7 @@ app.get('/health', async (_, res) => {
   }
 });
 
-// Collect (deposit)
+// ─── MarzPay: Collect (deposit) ───────────────────────────────────────────────
 app.post('/collect', async (req, res) => {
   try {
     const r = await axios.post(`${MARZPAY_BASE}/collect-money`, req.body, { headers: marzHeaders });
@@ -53,7 +61,7 @@ app.post('/collect', async (req, res) => {
   }
 });
 
-// Withdraw
+// ─── MarzPay: Withdraw ────────────────────────────────────────────────────────
 app.post('/withdraw', async (req, res) => {
   try {
     const r = await axios.post(`${MARZPAY_BASE}/send-money`, req.body, { headers: marzHeaders });
@@ -63,24 +71,20 @@ app.post('/withdraw', async (req, res) => {
   }
 });
 
-// Status check — no caching, always fresh
+// ─── MarzPay: Status check ────────────────────────────────────────────────────
 app.get('/status/:uuid', async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.set('Pragma', 'no-cache');
   try {
     const url = `${MARZPAY_BASE}/collect-money/${req.params.uuid}?_t=${Date.now()}`;
-    const r = await axios.get(url, {
-      headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' },
-    });
+    const r = await axios.get(url, { headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' } });
     res.json(r.data);
   } catch (e) {
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
-// ─── Phone Verification Routes ───────────────────────────────────────────────
-
-// Verify phone number and get registered name
+// ─── Phone Verification ───────────────────────────────────────────────────────
 app.post('/phone-verification/verify', async (req, res) => {
   try {
     console.log('[PHONE-VERIFY] Request:', JSON.stringify(req.body, null, 2));
@@ -89,14 +93,10 @@ app.post('/phone-verification/verify', async (req, res) => {
     res.json(r.data);
   } catch (e) {
     console.error('[PHONE-VERIFY] Error:', e.message);
-    if (e.response) {
-      console.error('[PHONE-VERIFY] Error response:', JSON.stringify(e.response.data, null, 2));
-    }
     res.json(e.response?.data ?? { success: false, message: e.message });
   }
 });
 
-// Get phone verification service info
 app.get('/phone-verification/service-info', async (req, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/phone-verification/service-info`, { headers: marzHeaders });
@@ -106,7 +106,6 @@ app.get('/phone-verification/service-info', async (req, res) => {
   }
 });
 
-// Check phone verification subscription status
 app.get('/phone-verification/subscription-status', async (req, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/phone-verification/subscription-status`, { headers: marzHeaders });
@@ -116,9 +115,7 @@ app.get('/phone-verification/subscription-status', async (req, res) => {
   }
 });
 
-// ─── Bill Payment Routes ─────────────────────────────────────────────────────
-
-// Get available services/utilities
+// ─── Bill Payment ─────────────────────────────────────────────────────────────
 app.get('/bill-payment/services', async (req, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bill-payment/services`, { headers: marzHeaders });
@@ -128,7 +125,6 @@ app.get('/bill-payment/services', async (req, res) => {
   }
 });
 
-// Get NWSC areas
 app.get('/bill-payment/nwsc/areas', async (req, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bill-payment/nwsc/areas`, { headers: marzHeaders });
@@ -138,7 +134,6 @@ app.get('/bill-payment/nwsc/areas', async (req, res) => {
   }
 });
 
-// Get DSTV bouquet codes
 app.get('/bill-payment/dstv/bouquet-codes', async (req, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bill-payment/dstv/bouquet-codes`, { headers: marzHeaders });
@@ -148,7 +143,6 @@ app.get('/bill-payment/dstv/bouquet-codes', async (req, res) => {
   }
 });
 
-// Get GOTV bouquet codes
 app.get('/bill-payment/gotv/bouquet-codes', async (req, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bill-payment/gotv/bouquet-codes`, { headers: marzHeaders });
@@ -158,7 +152,6 @@ app.get('/bill-payment/gotv/bouquet-codes', async (req, res) => {
   }
 });
 
-// Verify meter/account number
 app.post('/bill-payment/verify', async (req, res) => {
   try {
     console.log('[BILL-VERIFY] Request:', JSON.stringify(req.body));
@@ -171,7 +164,6 @@ app.post('/bill-payment/verify', async (req, res) => {
   }
 });
 
-// Initiate bill payment
 app.post('/bill-payment', async (req, res) => {
   try {
     console.log('[BILL-PAY] Request:', JSON.stringify(req.body));
@@ -184,7 +176,6 @@ app.post('/bill-payment', async (req, res) => {
   }
 });
 
-// Get bill payment transaction by reference
 app.get('/bill-payment/:reference', async (req, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bill-payment/${req.params.reference}`, { headers: marzHeaders });
@@ -194,9 +185,7 @@ app.get('/bill-payment/:reference', async (req, res) => {
   }
 });
 
-// ─── Bank Transfer Routes ────────────────────────────────────────────────────
-
-// Get list of supported banks
+// ─── Bank Transfer ────────────────────────────────────────────────────────────
 app.get('/bank-transfer/banks', async (req, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bank-transfer/banks`, { headers: marzHeaders });
@@ -206,27 +195,19 @@ app.get('/bank-transfer/banks', async (req, res) => {
   }
 });
 
-// Validate bank account — log full raw response for debugging
 app.post('/bank-transfer/validate', async (req, res) => {
   try {
     console.log('[VALIDATE] Request body:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/bank-transfer/validate`, req.body, { headers: marzHeaders });
-    console.log('[VALIDATE] HTTP status:', r.status);
-    console.log('[VALIDATE] Full response:', JSON.stringify(r.data, null, 2));
+    console.log('[VALIDATE] Response:', JSON.stringify(r.data, null, 2));
     res.json(r.data);
   } catch (e) {
     console.error('[VALIDATE] Error:', e.message);
-    if (e.response) {
-      console.error('[VALIDATE] HTTP status:', e.response.status);
-      console.error('[VALIDATE] Error body:', JSON.stringify(e.response.data, null, 2));
-      // Return the actual error response so the app can see it
-      return res.json(e.response.data);
-    }
+    if (e.response) return res.json(e.response.data);
     res.json({ status: 'error', message: e.message });
   }
 });
 
-// Get bank transfer service settings
 app.get('/bank-transfer/services', async (req, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bank-transfer/services`, { headers: marzHeaders });
@@ -236,37 +217,82 @@ app.get('/bank-transfer/services', async (req, res) => {
   }
 });
 
-// Create bank transfer
 app.post('/bank-transfer', async (req, res) => {
   try {
     console.log('[BANK-TRANSFER] Request:', JSON.stringify(req.body, null, 2));
     const r = await axios.post(`${MARZPAY_BASE}/bank-transfer`, req.body, { headers: marzHeaders });
-    console.log('[BANK-TRANSFER] Response status:', r.status);
-    console.log('[BANK-TRANSFER] Response data:', JSON.stringify(r.data, null, 2));
+    console.log('[BANK-TRANSFER] Response:', JSON.stringify(r.data, null, 2));
     res.json(r.data);
   } catch (e) {
     console.error('[BANK-TRANSFER] Error:', e.message);
-    if (e.response) {
-      console.error('[BANK-TRANSFER] Error response:', JSON.stringify(e.response.data, null, 2));
-    }
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
-// Check bank transfer status
 app.get('/bank-transfer/:reference', async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.set('Pragma', 'no-cache');
   try {
     const url = `${MARZPAY_BASE}/bank-transfer/${req.params.reference}?_t=${Date.now()}`;
-    const r = await axios.get(url, {
-      headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' },
-    });
+    const r = await axios.get(url, { headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' } });
     res.json(r.data);
   } catch (e) {
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
+// ─── Relworx: Airtime & Data Bundles ─────────────────────────────────────────
+
+// GET /relworx/products — list all available products
+app.get('/relworx/products', async (req, res) => {
+  try {
+    console.log('[RELWORX] GET products');
+    const r = await axios.get(`${RELWORX_BASE}/products`, { headers: relworxHeaders() });
+    res.json(r.data);
+  } catch (e) {
+    console.error('[RELWORX] products error:', e.message);
+    res.json(e.response?.data ?? { success: false, message: e.message });
+  }
+});
+
+// GET /relworx/products/:code/price_list — bundle packages for a product
+app.get('/relworx/products/:code/price_list', async (req, res) => {
+  try {
+    console.log('[RELWORX] GET price_list for', req.params.code);
+    const r = await axios.get(`${RELWORX_BASE}/products/${req.params.code}/price_list`, { headers: relworxHeaders() });
+    res.json(r.data);
+  } catch (e) {
+    console.error('[RELWORX] price_list error:', e.message);
+    res.json(e.response?.data ?? { success: false, message: e.message });
+  }
+});
+
+// POST /relworx/products/validate — validate phone/product before purchase
+app.post('/relworx/products/validate', async (req, res) => {
+  try {
+    console.log('[RELWORX] POST validate:', JSON.stringify(req.body));
+    const r = await axios.post(`${RELWORX_BASE}/products/validate`, req.body, { headers: relworxHeaders() });
+    console.log('[RELWORX] validate response:', JSON.stringify(r.data));
+    res.json(r.data);
+  } catch (e) {
+    console.error('[RELWORX] validate error:', e.message, e.response?.data);
+    res.json(e.response?.data ?? { success: false, message: e.message });
+  }
+});
+
+// POST /relworx/products/purchase — buy airtime or data bundle
+app.post('/relworx/products/purchase', async (req, res) => {
+  try {
+    console.log('[RELWORX] POST purchase:', JSON.stringify(req.body));
+    const r = await axios.post(`${RELWORX_BASE}/products/purchase`, req.body, { headers: relworxHeaders() });
+    console.log('[RELWORX] purchase response:', JSON.stringify(r.data));
+    res.json(r.data);
+  } catch (e) {
+    console.error('[RELWORX] purchase error:', e.message, e.response?.data);
+    res.json(e.response?.data ?? { success: false, message: e.message });
+  }
+});
+
+// ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`MarzPay proxy running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Proxy running on port ${PORT}`));
