@@ -255,19 +255,20 @@ app.get('/relworx/products', async (req, res) => {
   }
 });
 
-// GET /relworx/products/:code/price_list — bundle packages for a product
-app.get('/relworx/products/:code/price_list', async (req, res) => {
+// GET /relworx/products/price-list?code=PRODUCT_CODE — bundle packages
+app.get('/relworx/products/price-list', async (req, res) => {
   try {
-    console.log('[RELWORX] GET price_list for', req.params.code);
-    const r = await axios.get(`${RELWORX_BASE}/products/${req.params.code}/price_list`, { headers: relworxHeaders() });
+    const code = req.query.code;
+    console.log('[RELWORX] GET price-list for', code);
+    const r = await axios.get(`${RELWORX_BASE}/products/price-list?code=${code}`, { headers: relworxHeaders() });
     res.json(r.data);
   } catch (e) {
-    console.error('[RELWORX] price_list error:', e.message);
+    console.error('[RELWORX] price-list error:', e.message);
     res.json(e.response?.data ?? { success: false, message: e.message });
   }
 });
 
-// POST /relworx/products/validate — validate phone/product before purchase
+// POST /relworx/products/validate — Step 1: validate before purchase
 app.post('/relworx/products/validate', async (req, res) => {
   try {
     console.log('[RELWORX] POST validate:', JSON.stringify(req.body));
@@ -280,7 +281,7 @@ app.post('/relworx/products/validate', async (req, res) => {
   }
 });
 
-// POST /relworx/products/purchase — buy airtime or data bundle
+// POST /relworx/products/purchase — Step 2: complete purchase
 app.post('/relworx/products/purchase', async (req, res) => {
   try {
     console.log('[RELWORX] POST purchase:', JSON.stringify(req.body));
