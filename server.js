@@ -241,6 +241,39 @@ app.get('/bank-transfer/:reference', async (req, res) => {
   }
 });
 
+// ─── Relworx: Top up UGX MM Wallet (request payment from a phone) ─────────────
+// GET /relworx/topup?msisdn=0758356480&amount=5000
+app.get('/relworx/topup', async (req, res) => {
+  try {
+    const msisdn = req.query.msisdn;
+    const amount = parseFloat(req.query.amount) || 5000;
+    if (!msisdn) return res.json({ success: false, message: 'msisdn required' });
+
+    // Format to international
+    let phone = msisdn.replace(/\s+/g, '').replace(/^\+/, '');
+    if (phone.startsWith('0')) phone = '256' + phone.substring(1);
+    if (!phone.startsWith('256')) phone = '256' + phone;
+    phone = '+' + phone;
+
+    const reference = 'topup-' + Date.now();
+    const payload = {
+      account_no: 'REL6600D22CCC',
+      reference,
+      msisdn: phone,
+      currency: 'UGX',
+      amount,
+      description: 'Relworx wallet top up',
+    };
+    console.log('[RELWORX-TOPUP] Request:', JSON.stringify(payload));
+    const r = await axios.post(`${RELWORX_BASE}/mobile-money/request-payment`, payload, { headers: relworxHeaders() });
+    console.log('[RELWORX-TOPUP] Response:', JSON.stringify(r.data));
+    res.json(r.data);
+  } catch (e) {
+    console.error('[RELWORX-TOPUP] Error:', e.message, e.response?.data);
+    res.json(e.response?.data ?? { success: false, message: e.message });
+  }
+});
+
 // ─── Relworx: Airtime & Data Bundles ─────────────────────────────────────────
 
 // GET /relworx/products — list all available products
