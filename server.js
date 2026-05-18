@@ -10,6 +10,10 @@ const PROXY_SECRET  = 'rutooma_agro_2025_proxy_key';
 const RELWORX_BASE  = 'https://payments.relworx.com/api';
 const RELWORX_KEY   = process.env.RELWORX_API_KEY || 'e4d6b28b39d2cf.zfWf7ysq7Gyo7F3owgkSaw';
 
+const AT_BASE       = 'https://api.africastalking.com/version1';
+const AT_USERNAME   = process.env.AT_USERNAME || 'TURINAYO';
+const AT_API_KEY    = process.env.AT_API_KEY  || 'atsk_349d16db2901c7f62fbe2faf626b4a12a5bd82c964e62f62b9826f1510aceeebe25b0d82';
+
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -271,6 +275,63 @@ app.get('/relworx/topup', async (req, res) => {
     res.json(r.data);
   } catch (e) {
     console.error('[RELWORX-TOPUP] Error:', e.message, e.response?.data);
+    res.json(e.response?.data ?? { success: false, message: e.message });
+  }
+});
+
+// ─── Africa's Talking: Airtime ────────────────────────────────────────────────
+// POST /at/airtime/send  body: { phoneNumber, amount }  (amount in UGX, integer)
+app.post('/at/airtime/send', async (req, res) => {
+  try {
+    const { phoneNumber, amount } = req.body;
+    if (!phoneNumber || !amount) {
+      return res.json({ success: false, message: 'phoneNumber and amount are required' });
+    }
+
+    // Normalise to international format
+    let phone = String(phoneNumber).replace(/\s+/g, '').replace(/^\+/, '');
+    if (phone.startsWith('0')) phone = '256' + phone.substring(1);
+    if (!phone.startsWith('256')) phone = '256' + phone;
+    phone = '+' + phone;
+
+    const recipients = JSON.stringify([{ phoneNumber: phone, amount: `UGX ${amount}` }]);
+
+    console.log('[AT-AIRTIME] Sending', recipients);
+
+    const r = await axios.post(
+      `${AT_BASE}/airtime/send`,
+      new URLSearchParams({ username: AT_USERNAME, recipients }),
+      {
+        headers: {
+          'apiKey': AT_API_KEY,
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
+
+    console.log('[AT-AIRTIME] Response:', JSON.stringify(r.data));
+
+    // AT returns responses array — check for success
+    const responses = r.data?.responses ?? [];
+    const entry = responses[0] ?? {};
+    const status = (entry.status ?? '').toLowerCase();
+
+    if (status === 'success' || r.data?.numSent > 0) {
+      return res.json({
+        success: true,
+        message: 'Airtime sent successfully',
+        amount: entry.amount ?? `UGX ${amount}`,
+        phoneNumber: phone,
+        requestId: entry.requestId ?? '',
+      });
+    }
+
+    // AT error
+    const errMsg = entry.errorMessage ?? r.data?.errorMessage ?? 'Airtime sending failed';
+    res.json({ success: false, message: errMsg, raw: r.data });
+  } catch (e) {
+    console.error('[AT-AIRTIME] Error:', e.message, e.response?.data);
     res.json(e.response?.data ?? { success: false, message: e.message });
   }
 });
