@@ -3,14 +3,21 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
+// ── Config ────────────────────────────────────────────────────────────────────
 const MARZPAY_BASE  = 'https://wallet.wearemarz.com/api/v1';
-const MARZPAY_AUTH  = 'bWFyel9TTmdZMHRwb1FVcFk1WmNoOndIRWdTT0lhUjhCUjNMMDV2NlZFUHFzMTBOZFdNZzU4';
-const PROXY_SECRET  = 'rutooma_agro_2025_proxy_key';
+const MARZPAY_AUTH  = process.env.MARZPAY_AUTH  || 'bWFyel9TTmdZMHRwb1FVcFk1WmNoOndIRWdTT0lhUjhCUjNMMDV2NlZFUHFzMTBOZFdNZzU4';
+// Accept BOTH the old key (rutooma_agro_2025_proxy_key) and the new SACCOPLUS key
+// so existing installs keep working while new ones use the new key
+const PROXY_KEYS    = new Set([
+  process.env.PROXY_KEY || 'saccoplus_pro_2025_proxy_key',
+  'rutooma_agro_2025_proxy_key',   // legacy — old app versions
+  'saccoplus_pro_2025_proxy_key',  // new app versions
+]);
 
 const RELWORX_BASE  = 'https://payments.relworx.com/api';
 const RELWORX_KEY   = process.env.RELWORX_API_KEY || 'e4d6b28b39d2cf.zfWf7ysq7Gyo7F3owgkSaw';
 
-// ─── CORS ─────────────────────────────────────────────────────────────────────
+// ── CORS ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -20,15 +27,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   if (req.path === '/health') return next();
-  if (req.path === '/relworx/topup') return next(); // browser-accessible, no header needed
   const key = req.headers['x-proxy-key'];
-  if (key !== PROXY_SECRET) return res.status(403).json({ status: 'error', message: 'Unauthorized' });
+  if (!PROXY_KEYS.has(key)) {
+    return res.status(403).json({ status: 'error', message: 'Unauthorized' });
+  }
   next();
 });
 
+// ── Shared headers ────────────────────────────────────────────────────────────
 const marzHeaders = {
   'Authorization': `Basic ${MARZPAY_AUTH}`,
   'Content-Type': 'application/json',
@@ -42,37 +51,47 @@ const relworxHeaders = () => ({
   'Authorization': `Bearer ${RELWORX_KEY}`,
 });
 
-// ─── Health check ─────────────────────────────────────────────────────────────
+// ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', async (_, res) => {
   try {
     const r = await axios.get('https://api.ipify.org?format=json');
-    res.json({ status: 'ok', outgoing_ip: r.data.ip });
+    res.json({ status: 'ok', service: 'SACCOPLUS Pro Proxy', outgoing_ip: r.data.ip });
   } catch {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', service: 'SACCOPLUS Pro Proxy' });
   }
 });
 
-// ─── MarzPay: Collect (deposit) ───────────────────────────────────────────────
+app.get('/', (_, res) => {
+  res.json({ status: 'ok', service: 'SACCOPLUS Pro Proxy v2.0.0' });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// MARZPAY — Mobile Money
+// ════════════════════════════════════════════════════════════════════════════
+
+// Collect (deposit) — MarzPay endpoint is /collect-money
 app.post('/collect', async (req, res) => {
   try {
     const r = await axios.post(`${MARZPAY_BASE}/collect-money`, req.body, { headers: marzHeaders });
     res.json(r.data);
   } catch (e) {
+    console.error('[COLLECT]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
-// ─── MarzPay: Withdraw ────────────────────────────────────────────────────────
+// Withdraw — MarzPay endpoint is /send-money
 app.post('/withdraw', async (req, res) => {
   try {
     const r = await axios.post(`${MARZPAY_BASE}/send-money`, req.body, { headers: marzHeaders });
     res.json(r.data);
   } catch (e) {
+    console.error('[WITHDRAW]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
-// ─── MarzPay: Status check ────────────────────────────────────────────────────
+// Status check — MarzPay endpoint is /collect-money/:uuid
 app.get('/status/:uuid', async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.set('Pragma', 'no-cache');
@@ -81,24 +100,28 @@ app.get('/status/:uuid', async (req, res) => {
     const r = await axios.get(url, { headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' } });
     res.json(r.data);
   } catch (e) {
+    console.error('[STATUS]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
-// ─── Phone Verification ───────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// MARZPAY — Phone Verification
+// ════════════════════════════════════════════════════════════════════════════
+
 app.post('/phone-verification/verify', async (req, res) => {
   try {
-    console.log('[PHONE-VERIFY] Request:', JSON.stringify(req.body, null, 2));
+    console.log('[PHONE-VERIFY] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/phone-verification/verify`, req.body, { headers: marzHeaders });
-    console.log('[PHONE-VERIFY] Response:', JSON.stringify(r.data, null, 2));
+    console.log('[PHONE-VERIFY] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[PHONE-VERIFY] Error:', e.message);
+    console.error('[PHONE-VERIFY]', e.message, e.response?.data);
     res.json(e.response?.data ?? { success: false, message: e.message });
   }
 });
 
-app.get('/phone-verification/service-info', async (req, res) => {
+app.get('/phone-verification/service-info', async (_, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/phone-verification/service-info`, { headers: marzHeaders });
     res.json(r.data);
@@ -107,7 +130,7 @@ app.get('/phone-verification/service-info', async (req, res) => {
   }
 });
 
-app.get('/phone-verification/subscription-status', async (req, res) => {
+app.get('/phone-verification/subscription-status', async (_, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/phone-verification/subscription-status`, { headers: marzHeaders });
     res.json(r.data);
@@ -116,8 +139,11 @@ app.get('/phone-verification/subscription-status', async (req, res) => {
   }
 });
 
-// ─── Bill Payment ─────────────────────────────────────────────────────────────
-app.get('/bill-payment/services', async (req, res) => {
+// ════════════════════════════════════════════════════════════════════════════
+// MARZPAY — Bill Payments
+// ════════════════════════════════════════════════════════════════════════════
+
+app.get('/bill-payment/services', async (_, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bill-payment/services`, { headers: marzHeaders });
     res.json(r.data);
@@ -126,7 +152,7 @@ app.get('/bill-payment/services', async (req, res) => {
   }
 });
 
-app.get('/bill-payment/nwsc/areas', async (req, res) => {
+app.get('/bill-payment/nwsc/areas', async (_, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bill-payment/nwsc/areas`, { headers: marzHeaders });
     res.json(r.data);
@@ -135,7 +161,7 @@ app.get('/bill-payment/nwsc/areas', async (req, res) => {
   }
 });
 
-app.get('/bill-payment/dstv/bouquet-codes', async (req, res) => {
+app.get('/bill-payment/dstv/bouquet-codes', async (_, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bill-payment/dstv/bouquet-codes`, { headers: marzHeaders });
     res.json(r.data);
@@ -144,7 +170,7 @@ app.get('/bill-payment/dstv/bouquet-codes', async (req, res) => {
   }
 });
 
-app.get('/bill-payment/gotv/bouquet-codes', async (req, res) => {
+app.get('/bill-payment/gotv/bouquet-codes', async (_, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bill-payment/gotv/bouquet-codes`, { headers: marzHeaders });
     res.json(r.data);
@@ -160,7 +186,7 @@ app.post('/bill-payment/verify', async (req, res) => {
     console.log('[BILL-VERIFY] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[BILL-VERIFY] Error:', e.message, e.response?.data);
+    console.error('[BILL-VERIFY]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -172,7 +198,7 @@ app.post('/bill-payment', async (req, res) => {
     console.log('[BILL-PAY] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[BILL-PAY] Error:', e.message, e.response?.data);
+    console.error('[BILL-PAY]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -186,8 +212,11 @@ app.get('/bill-payment/:reference', async (req, res) => {
   }
 });
 
-// ─── Bank Transfer ────────────────────────────────────────────────────────────
-app.get('/bank-transfer/banks', async (req, res) => {
+// ════════════════════════════════════════════════════════════════════════════
+// MARZPAY — Bank Transfer
+// ════════════════════════════════════════════════════════════════════════════
+
+app.get('/bank-transfer/banks', async (_, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bank-transfer/banks`, { headers: marzHeaders });
     res.json(r.data);
@@ -198,18 +227,17 @@ app.get('/bank-transfer/banks', async (req, res) => {
 
 app.post('/bank-transfer/validate', async (req, res) => {
   try {
-    console.log('[VALIDATE] Request body:', JSON.stringify(req.body));
+    console.log('[BANK-VALIDATE] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/bank-transfer/validate`, req.body, { headers: marzHeaders });
-    console.log('[VALIDATE] Response:', JSON.stringify(r.data, null, 2));
+    console.log('[BANK-VALIDATE] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[VALIDATE] Error:', e.message);
-    if (e.response) return res.json(e.response.data);
-    res.json({ status: 'error', message: e.message });
+    console.error('[BANK-VALIDATE]', e.message, e.response?.data);
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
-app.get('/bank-transfer/services', async (req, res) => {
+app.get('/bank-transfer/services', async (_, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/bank-transfer/services`, { headers: marzHeaders });
     res.json(r.data);
@@ -220,19 +248,18 @@ app.get('/bank-transfer/services', async (req, res) => {
 
 app.post('/bank-transfer', async (req, res) => {
   try {
-    console.log('[BANK-TRANSFER] Request:', JSON.stringify(req.body, null, 2));
+    console.log('[BANK-TRANSFER] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/bank-transfer`, req.body, { headers: marzHeaders });
-    console.log('[BANK-TRANSFER] Response:', JSON.stringify(r.data, null, 2));
+    console.log('[BANK-TRANSFER] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[BANK-TRANSFER] Error:', e.message);
+    console.error('[BANK-TRANSFER]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
 app.get('/bank-transfer/:reference', async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.set('Pragma', 'no-cache');
   try {
     const url = `${MARZPAY_BASE}/bank-transfer/${req.params.reference}?_t=${Date.now()}`;
     const r = await axios.get(url, { headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' } });
@@ -242,92 +269,55 @@ app.get('/bank-transfer/:reference', async (req, res) => {
   }
 });
 
-// ─── Relworx: Top up UGX MM Wallet (request payment from a phone) ─────────────
-// GET /relworx/topup?msisdn=0758356480&amount=5000
-app.get('/relworx/topup', async (req, res) => {
+// ════════════════════════════════════════════════════════════════════════════
+// RELWORX — Airtime & Data Bundles
+// ════════════════════════════════════════════════════════════════════════════
+
+app.get('/relworx/products', async (_, res) => {
   try {
-    const msisdn = req.query.msisdn;
-    const amount = parseFloat(req.query.amount) || 5000;
-    if (!msisdn) return res.json({ success: false, message: 'msisdn required' });
-
-    // Format to international
-    let phone = msisdn.replace(/\s+/g, '').replace(/^\+/, '');
-    if (phone.startsWith('0')) phone = '256' + phone.substring(1);
-    if (!phone.startsWith('256')) phone = '256' + phone;
-    phone = '+' + phone;
-
-    const reference = 'topup-' + Date.now();
-    const payload = {
-      account_no: 'REL6600D22CCC',
-      reference,
-      msisdn: phone,
-      currency: 'UGX',
-      amount,
-      description: 'Relworx wallet top up',
-    };
-    console.log('[RELWORX-TOPUP] Request:', JSON.stringify(payload));
-    const r = await axios.post(`${RELWORX_BASE}/mobile-money/request-payment`, payload, { headers: relworxHeaders() });
-    console.log('[RELWORX-TOPUP] Response:', JSON.stringify(r.data));
-    res.json(r.data);
-  } catch (e) {
-    console.error('[RELWORX-TOPUP] Error:', e.message, e.response?.data);
-    res.json(e.response?.data ?? { success: false, message: e.message });
-  }
-});
-
-// ─── Relworx: Airtime & Data Bundles ─────────────────────────────────────────
-
-// GET /relworx/products — list all available products
-app.get('/relworx/products', async (req, res) => {
-  try {
-    console.log('[RELWORX] GET products');
     const r = await axios.get(`${RELWORX_BASE}/products`, { headers: relworxHeaders() });
     res.json(r.data);
   } catch (e) {
-    console.error('[RELWORX] products error:', e.message);
+    console.error('[RELWORX-PRODUCTS]', e.message, e.response?.data);
     res.json(e.response?.data ?? { success: false, message: e.message });
   }
 });
 
-// GET /relworx/products/price-list?code=PRODUCT_CODE — bundle packages
 app.get('/relworx/products/price-list', async (req, res) => {
   try {
     const code = req.query.code;
-    console.log('[RELWORX] GET price-list for', code);
     const r = await axios.get(`${RELWORX_BASE}/products/price-list?code=${code}`, { headers: relworxHeaders() });
     res.json(r.data);
   } catch (e) {
-    console.error('[RELWORX] price-list error:', e.message);
+    console.error('[RELWORX-PRICELIST]', e.message, e.response?.data);
     res.json(e.response?.data ?? { success: false, message: e.message });
   }
 });
 
-// POST /relworx/products/validate — Step 1: validate before purchase
 app.post('/relworx/products/validate', async (req, res) => {
   try {
-    console.log('[RELWORX] POST validate:', JSON.stringify(req.body));
+    console.log('[RELWORX-VALIDATE] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${RELWORX_BASE}/products/validate`, req.body, { headers: relworxHeaders() });
-    console.log('[RELWORX] validate response:', JSON.stringify(r.data));
+    console.log('[RELWORX-VALIDATE] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[RELWORX] validate error:', e.message, e.response?.data);
+    console.error('[RELWORX-VALIDATE]', e.message, e.response?.data);
     res.json(e.response?.data ?? { success: false, message: e.message });
   }
 });
 
-// POST /relworx/products/purchase — Step 2: complete purchase
 app.post('/relworx/products/purchase', async (req, res) => {
   try {
-    console.log('[RELWORX] POST purchase:', JSON.stringify(req.body));
+    console.log('[RELWORX-PURCHASE] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${RELWORX_BASE}/products/purchase`, req.body, { headers: relworxHeaders() });
-    console.log('[RELWORX] purchase response:', JSON.stringify(r.data));
+    console.log('[RELWORX-PURCHASE] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[RELWORX] purchase error:', e.message, e.response?.data);
+    console.error('[RELWORX-PURCHASE]', e.message, e.response?.data);
     res.json(e.response?.data ?? { success: false, message: e.message });
   }
 });
 
-// ─── Start ────────────────────────────────────────────────────────────────────
+// ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Proxy running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✓ SACCOPLUS Pro Proxy v2.0.0 running on port ${PORT}`));
