@@ -26,6 +26,11 @@ app.use(limiter);
 
 // Proxy key validation
 const validateProxyKey = (req, res, next) => {
+  // Skip validation for health check
+  if (req.path === '/') {
+    return next();
+  }
+  
   const key = req.headers['x-proxy-key'];
   if (key !== PROXY_KEY) {
     return res.status(403).json({ error: 'Invalid proxy key' });
