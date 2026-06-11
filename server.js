@@ -30,7 +30,9 @@ app.use((req, res, next) => {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
-  if (req.path === '/health') return next();
+  // Skip auth for health check and root
+  if (req.path === '/health' || req.path === '/') return next();
+  
   const key = req.headers['x-proxy-key'];
   if (!PROXY_KEYS.has(key)) {
     return res.status(403).json({ status: 'error', message: 'Unauthorized' });
