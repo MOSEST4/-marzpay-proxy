@@ -30,7 +30,7 @@ app.use((req, res, next) => {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
-  if (req.path === '/health' || req.path === '/') return next();
+  if (req.path === '/health') return next();
   const key = req.headers['x-proxy-key'];
   if (!PROXY_KEYS.has(key)) {
     return res.status(403).json({ status: 'error', message: 'Unauthorized' });
@@ -63,16 +63,7 @@ app.get('/health', async (_, res) => {
 });
 
 app.get('/', (_, res) => {
-  res.json({ 
-    status: 'ok', 
-    service: 'SACCOPLUS Pro Proxy',
-    version: '2.0.0',
-    endpoints: {
-      marzpay: ['collect', 'withdraw', 'status/:uuid', 'phone-verification', 'bill-payment', 'bank-transfer'],
-      marzpay_airtime: ['marzpay/airtime/catalog', 'marzpay/airtime/purchase', 'marzpay/airtime/:reference'],
-      relworx: ['relworx/products', 'relworx/products/price-list', 'relworx/products/validate', 'relworx/products/purchase']
-    }
-  });
+  res.json({ status: 'ok', service: 'SACCOPLUS Pro Proxy v2.0.0' });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -146,57 +137,6 @@ app.get('/phone-verification/subscription-status', async (_, res) => {
     res.json(r.data);
   } catch (e) {
     res.json(e.response?.data ?? { success: false, message: e.message });
-  }
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// MARZPAY — Airtime & Data (NEW!)
-// ════════════════════════════════════════════════════════════════════════════
-
-app.get('/marzpay/airtime/catalog', async (req, res) => {
-  try {
-    console.log('[MARZ-AIRTIME] GET catalog');
-    const r = await axios.get(`${MARZPAY_BASE}/airtime-data/catalog`, { headers: marzHeaders });
-    console.log('[MARZ-AIRTIME] catalog response:', JSON.stringify(r.data));
-    res.json(r.data);
-  } catch (e) {
-    console.error('[MARZ-AIRTIME] catalog error:', e.message, e.response?.data);
-    res.json(e.response?.data ?? { status: 'error', message: e.message });
-  }
-});
-
-app.post('/marzpay/airtime/purchase', async (req, res) => {
-  try {
-    console.log('[MARZ-AIRTIME] POST purchase:', JSON.stringify(req.body));
-    const r = await axios.post(`${MARZPAY_BASE}/airtime-data`, req.body, { headers: marzHeaders });
-    console.log('[MARZ-AIRTIME] purchase response:', JSON.stringify(r.data));
-    res.json(r.data);
-  } catch (e) {
-    console.error('[MARZ-AIRTIME] purchase error:', e.message, e.response?.data);
-    res.json(e.response?.data ?? { status: 'error', message: e.message });
-  }
-});
-
-app.get('/marzpay/airtime/:reference', async (req, res) => {
-  try {
-    const r = await axios.get(`${MARZPAY_BASE}/airtime-data/${req.params.reference}`, { headers: marzHeaders });
-    res.json(r.data);
-  } catch (e) {
-    console.error('[MARZ-AIRTIME] get by reference error:', e.message, e.response?.data);
-    res.json(e.response?.data ?? { status: 'error', message: e.message });
-  }
-});
-
-app.get('/marzpay/airtime/purchases', async (req, res) => {
-  try {
-    const r = await axios.get(`${MARZPAY_BASE}/airtime-data`, { 
-      headers: marzHeaders,
-      params: req.query 
-    });
-    res.json(r.data);
-  } catch (e) {
-    console.error('[MARZ-AIRTIME] list purchases error:', e.message, e.response?.data);
-    res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
