@@ -15,9 +15,6 @@ const PROXY_KEYS    = new Set([
   'saccoplus_pro_2025_proxy_key',  // new app versions
 ]);
 
-const RELWORX_BASE  = 'https://payments.relworx.com/api';
-const RELWORX_KEY   = process.env.RELWORX_API_KEY || 'e4d6b28b39d2cf.zfWf7ysq7Gyo7F3owgkSaw';
-
 // ── CORS ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -47,12 +44,6 @@ const marzHeaders = {
   'Accept': 'application/json',
   'Cache-Control': 'no-cache',
 };
-
-const relworxHeaders = () => ({
-  'Accept': 'application/vnd.relworx.v2',
-  'Content-Type': 'application/json',
-  'Authorization': `Bearer ${RELWORX_KEY}`,
-});
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', async (_, res) => {
@@ -273,51 +264,68 @@ app.get('/bank-transfer/:reference', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// RELWORX — Airtime & Data Bundles
+// MARZPAY — Airtime & Data Bundles (MTN, Airtel, Lyca Uganda)
+// Proxy path: /marzpay/airtime/*  →  MarzPay /api/v1/airtime-data/*
 // ════════════════════════════════════════════════════════════════════════════
 
-app.get('/relworx/products', async (_, res) => {
+// GET /marzpay/airtime/catalog  →  GET /airtime-data/catalog
+app.get('/marzpay/airtime/catalog', async (_, res) => {
   try {
-    const r = await axios.get(`${RELWORX_BASE}/products`, { headers: relworxHeaders() });
+    const r = await axios.get(`${MARZPAY_BASE}/airtime-data/catalog`, { headers: marzHeaders });
+    console.log('[AIRTIME-CATALOG] status:', r.data?.status);
     res.json(r.data);
   } catch (e) {
-    console.error('[RELWORX-PRODUCTS]', e.message, e.response?.data);
-    res.json(e.response?.data ?? { success: false, message: e.message });
+    console.error('[AIRTIME-CATALOG]', e.message, e.response?.data);
+    res.status(e.response?.status ?? 502).json(
+      e.response?.data ?? { status: 'error', message: e.message }
+    );
   }
 });
 
-app.get('/relworx/products/price-list', async (req, res) => {
+// POST /marzpay/airtime/purchase  →  POST /airtime-data
+app.post('/marzpay/airtime/purchase', async (req, res) => {
   try {
-    const code = req.query.code;
-    const r = await axios.get(`${RELWORX_BASE}/products/price-list?code=${code}`, { headers: relworxHeaders() });
-    res.json(r.data);
+    console.log('[AIRTIME-PURCHASE] Request:', JSON.stringify(req.body));
+    const r = await axios.post(`${MARZPAY_BASE}/airtime-data`, req.body, { headers: marzHeaders });
+    console.log('[AIRTIME-PURCHASE] Response status:', r.status, '| data status:', r.data?.status);
+    // MarzPay returns 202 for pending Airtel data bundles — forward the real HTTP status
+    res.status(r.status).json(r.data);
   } catch (e) {
-    console.error('[RELWORX-PRICELIST]', e.message, e.response?.data);
-    res.json(e.response?.data ?? { success: false, message: e.message });
+    console.error('[AIRTIME-PURCHASE]', e.message, e.response?.data);
+    res.status(e.response?.status ?? 502).json(
+      e.response?.data ?? { status: 'error', message: e.message }
+    );
   }
 });
 
-app.post('/relworx/products/validate', async (req, res) => {
+// GET /marzpay/airtime/status/:reference  →  GET /airtime-data/:reference
+// Used for polling pending Airtel data bundles
+app.get('/marzpay/airtime/status/:reference', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   try {
-    console.log('[RELWORX-VALIDATE] Request:', JSON.stringify(req.body));
-    const r = await axios.post(`${RELWORX_BASE}/products/validate`, req.body, { headers: relworxHeaders() });
-    console.log('[RELWORX-VALIDATE] Response:', JSON.stringify(r.data));
+    const url = `${MARZPAY_BASE}/airtime-data/${req.params.reference}?_t=${Date.now()}`;
+    const r = await axios.get(url, { headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' } });
+    console.log('[AIRTIME-STATUS]', req.params.reference, '→', r.data?.data?.status);
     res.json(r.data);
   } catch (e) {
-    console.error('[RELWORX-VALIDATE]', e.message, e.response?.data);
-    res.json(e.response?.data ?? { success: false, message: e.message });
+    console.error('[AIRTIME-STATUS]', e.message, e.response?.data);
+    res.status(e.response?.status ?? 502).json(
+      e.response?.data ?? { status: 'error', message: e.message }
+    );
   }
 });
 
-app.post('/relworx/products/purchase', async (req, res) => {
+// GET /marzpay/airtime/detect-network  →  GET /airtime-data/detect-network?msisdn=...
+app.get('/marzpay/airtime/detect-network', async (req, res) => {
   try {
-    console.log('[RELWORX-PURCHASE] Request:', JSON.stringify(req.body));
-    const r = await axios.post(`${RELWORX_BASE}/products/purchase`, req.body, { headers: relworxHeaders() });
-    console.log('[RELWORX-PURCHASE] Response:', JSON.stringify(r.data));
+    const msisdn = req.query.msisdn;
+    const r = await axios.get(`${MARZPAY_BASE}/airtime-data/detect-network?msisdn=${msisdn}`, { headers: marzHeaders });
     res.json(r.data);
   } catch (e) {
-    console.error('[RELWORX-PURCHASE]', e.message, e.response?.data);
-    res.json(e.response?.data ?? { success: false, message: e.message });
+    console.error('[AIRTIME-DETECT-NETWORK]', e.message, e.response?.data);
+    res.status(e.response?.status ?? 502).json(
+      e.response?.data ?? { status: 'error', message: e.message }
+    );
   }
 });
 
