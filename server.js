@@ -5,7 +5,8 @@ app.use(express.json());
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const MARZPAY_BASE  = 'https://wallet.wearemarz.com/api/v1';
-const MARZPAY_AUTH  = process.env.MARZPAY_AUTH  || 'bWFyel9TTmdZMHRwb1FVcFk1WmNoOndIRWdTT0lhUjhCUjNMMDV2NlZFUHFzMTBOZFdNZzU4';
+const MARZPAY_AUTH  = process.env.MARZPAY_AUTH; // set in Render environment variables
+const GROQ_API_KEY  = process.env.GROQ_API_KEY; // set in Render environment variables
 
 // Accept BOTH the old key (rutooma_agro_2025_proxy_key) and the new SACCOPLUS key
 // so existing installs keep working while new ones use the new key
@@ -329,6 +330,82 @@ app.get('/marzpay/airtime/detect-network', async (req, res) => {
   }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// AI CHAT — Groq (llama-3.3-70b-versatile)
+// POST /ai/chat  { messages: [{role, content}] }
+// ════════════════════════════════════════════════════════════════════════════
+
+const GROQ_BASE = 'https://api.groq.com/openai/v1';
+
+const SACCO_SYSTEM_PROMPT = `You are SACCOPLUS AI Assistant, a helpful financial assistant for SACCOPLUS Pro — a SACCO (Savings and Credit Cooperative) fintech platform in Uganda.
+
+You help members with:
+- Understanding their wallet, savings, shares, and fixed deposits
+- Loan applications, eligibility, and repayment guidance
+- Mobile money (MoMo) deposits and withdrawals
+- Airtime & data bundle purchases (MTN, Airtel, Lyca Uganda)
+- Bill payments (UMEME electricity, NWSC water, DStv, GOtv, StarTimes)
+- Bank transfers
+- General SACCO financial literacy and advice
+
+SACCOPLUS Pro key features:
+- Wallet: deposit via MTN/Airtel MoMo, withdraw to mobile money
+- Savings: Voluntary and Compulsory savings accounts
+- Shares: purchase cooperative shares
+- Fixed Deposits: earn interest on locked savings
+- Loans: apply, track, and repay SACCO loans
+- Airtime & Data: buy for MTN, Airtel, Lyca Uganda
+- Bill Pay: UMEME, NWSC, DStv, GOtv, StarTimes
+- Bank Transfer: send to any Ugandan bank
+
+Currency: Ugandan Shillings (UGX). Always be friendly, concise, and practical. If you don't know something specific about the member's account, encourage them to check the relevant screen in the app.`;
+
+app.post('/ai/chat', async (req, res) => {
+  try {
+    const { messages } = req.body;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    const r = await axios.post(
+      `${GROQ_BASE}/chat/completions`,
+      {
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: SACCO_SYSTEM_PROMPT },
+          ...messages,
+        ],
+        max_tokens: 1024,
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    const reply = r.data.choices?.[0]?.message?.content ?? '';
+    res.json({ reply });
+  } catch (e) {
+    console.error('[AI-CHAT]', e.message, e.response?.data);
+    res.status(e.response?.status ?? 502).json({
+      error: e.response?.data?.error?.message ?? e.message,
+    });
+  }
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
+
+// Fail fast if required secrets are missing
+const REQUIRED_ENV = ['MARZPAY_AUTH', 'GROQ_API_KEY', 'PROXY_KEY'];
+const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missing.length > 0) {
+  console.error(`✗ Missing required environment variables: ${missing.join(', ')}`);
+  console.error('  Set them in Render → Environment → Environment Variables');
+  process.exit(1);
+}
+
 app.listen(PORT, () => console.log(`✓ SACCOPLUS Pro Proxy v2.0.0 running on port ${PORT}`));
