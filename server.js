@@ -57,17 +57,32 @@ app.get('/health', async (_, res) => {
 });
 
 app.get('/', (_, res) => {
-  res.json({ status: 'ok', service: 'SACCOPLUS Pro Proxy v2.0.0' });
+  res.json({
+    status: 'ok',
+    service: 'SACCOPLUS Pro Proxy v2.1.0',
+    markets: ['UG','KE','RW','CD','ZM','CM','BJ','CI','GA','CG','SN','SL'],
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// MARZPAY — Mobile Money
+// MARZPAY — Mobile Money (multi-country: UG · KE · RW · CD · ZM · CM ·
+//                          BJ · CI · GA · CG · SN · SL)
+//
+// The Flutter app sends `country` (and `currency` for DRC) in the request
+// body. This proxy passes req.body straight through to MarzPay — no body
+// transformation needed. Country-awareness is handled entirely by the client.
 // ════════════════════════════════════════════════════════════════════════════
 
 // Collect (deposit) — MarzPay endpoint is /collect-money
+// Body must include: amount, phone_number, reference (UUID), country
+// Optional: currency (DRC only: 'CDF' | 'USD'), description, callback_url
 app.post('/collect', async (req, res) => {
   try {
+    const country  = req.body.country  ?? 'UG';
+    const currency = req.body.currency ?? '';
+    console.log(`[COLLECT] country=${country}${currency ? ' currency=' + currency : ''} amount=${req.body.amount} phone=${req.body.phone_number}`);
     const r = await axios.post(`${MARZPAY_BASE}/collect-money`, req.body, { headers: marzHeaders });
+    console.log(`[COLLECT] → status=${r.data?.status} txn=${r.data?.data?.transaction?.uuid}`);
     res.json(r.data);
   } catch (e) {
     console.error('[COLLECT]', e.message, e.response?.data);
@@ -75,10 +90,16 @@ app.post('/collect', async (req, res) => {
   }
 });
 
-// Withdraw — MarzPay endpoint is /send-money
+// Withdraw (send money) — MarzPay endpoint is /send-money
+// Body must include: amount, phone_number, reference, country
+// Optional: currency (DRC only), description, callback_url
 app.post('/withdraw', async (req, res) => {
   try {
+    const country  = req.body.country  ?? 'UG';
+    const currency = req.body.currency ?? '';
+    console.log(`[WITHDRAW] country=${country}${currency ? ' currency=' + currency : ''} amount=${req.body.amount} phone=${req.body.phone_number}`);
     const r = await axios.post(`${MARZPAY_BASE}/send-money`, req.body, { headers: marzHeaders });
+    console.log(`[WITHDRAW] → status=${r.data?.status} txn=${r.data?.data?.transaction?.uuid}`);
     res.json(r.data);
   } catch (e) {
     console.error('[WITHDRAW]', e.message, e.response?.data);
@@ -96,6 +117,52 @@ app.get('/status/:uuid', async (req, res) => {
     res.json(r.data);
   } catch (e) {
     console.error('[STATUS]', e.message, e.response?.data);
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Collect-money services — returns available providers per country
+// GET /collect-money/services?country=KE
+app.get('/collect-money/services', async (req, res) => {
+  try {
+    const country = req.query.country ?? '';
+    const url = country
+      ? `${MARZPAY_BASE}/collect-money/services?country=${encodeURIComponent(country)}`
+      : `${MARZPAY_BASE}/collect-money/services`;
+    const r = await axios.get(url, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    console.error('[COLLECT-SERVICES]', e.message, e.response?.data);
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Send-money services — returns limits and allowed providers per country
+// GET /send-money/services?country=KE
+app.get('/send-money/services', async (req, res) => {
+  try {
+    const country = req.query.country ?? '';
+    const url = country
+      ? `${MARZPAY_BASE}/send-money/services?country=${encodeURIComponent(country)}`
+      : `${MARZPAY_BASE}/send-money/services`;
+    const r = await axios.get(url, { headers: marzHeaders });
+    res.json(r.data);
+  } catch (e) {
+    console.error('[SEND-SERVICES]', e.message, e.response?.data);
+    res.json(e.response?.data ?? { status: 'error', message: e.message });
+  }
+});
+
+// Withdraw status check — MarzPay endpoint is /send-money/:uuid
+app.get('/withdraw-status/:uuid', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  try {
+    const url = `${MARZPAY_BASE}/send-money/${req.params.uuid}?_t=${Date.now()}`;
+    const r = await axios.get(url, { headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' } });
+    res.json(r.data);
+  } catch (e) {
+    console.error('[WITHDRAW-STATUS]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -398,4 +465,4 @@ app.post('/ai/chat', async (req, res) => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✓ SACCOPLUS Pro Proxy v2.0.0 running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✓ SACCOPLUS Pro Proxy v2.1.0 running on port ${PORT} — markets: UG KE RW CD ZM CM BJ CI GA CG SN SL`));
