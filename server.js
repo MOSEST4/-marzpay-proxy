@@ -398,6 +398,45 @@ app.get('/marzpay/airtime/detect-network', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// FOREX RATES — open.er-api.com (free, no key, updates daily)
+// GET /forex/rates?base=UGX
+// Returns live exchange rates from UGX to all currencies.
+// Cached in-memory for 1 hour to stay within rate limits.
+// Attribution: https://www.exchangerate-api.com
+// ════════════════════════════════════════════════════════════════════════════
+
+const forexCache = {};   // { base: { rates, fetchedAt } }
+const FOREX_CACHE_TTL = 60 * 60 * 1000; // 1 hour in ms
+
+app.get('/forex/rates', async (req, res) => {
+  const base = (req.query.base || 'UGX').toUpperCase();
+  const now  = Date.now();
+
+  // Serve cached rates if fresh
+  if (forexCache[base] && (now - forexCache[base].fetchedAt) < FOREX_CACHE_TTL) {
+    console.log(`[FOREX] Serving cached rates for ${base}`);
+    return res.json({ status: 'success', base, rates: forexCache[base].rates, cached: true });
+  }
+
+  try {
+    console.log(`[FOREX] Fetching live rates for ${base}`);
+    const r = await axios.get(`https://open.er-api.com/v6/latest/${base}`, { timeout: 8000 });
+    if (r.data?.result === 'success') {
+      forexCache[base] = { rates: r.data.rates, fetchedAt: now };
+      return res.json({ status: 'success', base, rates: r.data.rates, cached: false });
+    }
+    throw new Error('Unexpected response from exchange rate API');
+  } catch (e) {
+    console.error('[FOREX]', e.message);
+    // Return stale cache if available, else error
+    if (forexCache[base]) {
+      return res.json({ status: 'success', base, rates: forexCache[base].rates, cached: true, stale: true });
+    }
+    res.status(502).json({ status: 'error', message: 'Could not fetch exchange rates. Try again later.' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // AI CHAT — Groq (openai/gpt-oss-20b)
 // POST /ai/chat  { messages: [{role, content}] }
 // ════════════════════════════════════════════════════════════════════════════
