@@ -398,7 +398,7 @@ app.get('/marzpay/airtime/detect-network', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// AI CHAT — Groq (llama-3.1-8b-instant)
+// AI CHAT — Groq (openai/gpt-oss-20b)
 // POST /ai/chat  { messages: [{role, content}] }
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -437,7 +437,7 @@ app.post('/ai/chat', async (req, res) => {
     const r = await axios.post(
       `${GROQ_BASE}/chat/completions`,
       {
-        model: 'llama-3.1-8b-instant',
+        model: 'openai/gpt-oss-20b',
         messages: [
           { role: 'system', content: SACCO_SYSTEM_PROMPT },
           ...messages,
