@@ -1,12 +1,20 @@
 const express = require('express');
 const axios = require('axios');
+require('dotenv').config(); // Load environment variables from .env file
+
 const app = express();
 app.use(express.json());
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const MARZPAY_BASE  = 'https://wallet.wearemarz.com/api/v1';
-const MARZPAY_AUTH  = process.env.MARZPAY_AUTH  || 'bWFyel9TTmdZMHRwb1FVcFk1WmNoOndIRWdTT0lhUjhCUjNMMDV2NlZFUHFzMTBOZFdNZzU4';
-const GROQ_API_KEY  = process.env.GROQ_API_KEY  || ['gsk_9itbXFJZ4jNKYBKCJW99WGdy', 'b3FYGe8MtzOGrf9NTa7p2qZOKXHu'].join('');
+const MARZPAY_BASE  = process.env.MARZPAY_BASE || 'https://wallet.wearemarz.com/api/v1';
+const MARZPAY_AUTH  = process.env.MARZPAY_AUTH;
+const GROQ_API_KEY  = process.env.GROQ_API_KEY;
+
+if (!MARZPAY_AUTH) {
+  console.error('❌ MARZPAY_AUTH is not set in environment variables!');
+  console.error('   Set it in .env file or as environment variable');
+  process.exit(1);
+}
 
 // Accept BOTH the old key (rutooma_agro_2025_proxy_key) and the new SACCOPLUS key
 // so existing installs keep working while new ones use the new key
@@ -80,10 +88,12 @@ app.get('/', (_, res) => {
 // Optional: currency (DRC only: 'CDF' | 'USD'), description, callback_url
 app.post('/collect', async (req, res) => {
   try {
+    console.log('[COLLECT] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/collect-money`, req.body, { headers: marzHeaders });
+    console.log('[COLLECT] Success:', r.data.status || r.data);
     res.json(r.data);
   } catch (e) {
-    console.error('[COLLECT] Error');
+    console.log('[COLLECT] Error:', e.response?.data || e.message);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -96,7 +106,6 @@ app.post('/withdraw', async (req, res) => {
     const r = await axios.post(`${MARZPAY_BASE}/send-money`, req.body, { headers: marzHeaders });
     res.json(r.data);
   } catch (e) {
-    console.error('[WITHDRAW] Error');
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -110,7 +119,6 @@ app.get('/status/:uuid', async (req, res) => {
     const r = await axios.get(url, { headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' } });
     res.json(r.data);
   } catch (e) {
-    console.error('[STATUS]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -126,7 +134,6 @@ app.get('/collect-money/services', async (req, res) => {
     const r = await axios.get(url, { headers: marzHeaders });
     res.json(r.data);
   } catch (e) {
-    console.error('[COLLECT-SERVICES]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -142,7 +149,6 @@ app.get('/send-money/services', async (req, res) => {
     const r = await axios.get(url, { headers: marzHeaders });
     res.json(r.data);
   } catch (e) {
-    console.error('[SEND-SERVICES]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -156,7 +162,6 @@ app.get('/withdraw-status/:uuid', async (req, res) => {
     const r = await axios.get(url, { headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' } });
     res.json(r.data);
   } catch (e) {
-    console.error('[WITHDRAW-STATUS]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -167,12 +172,9 @@ app.get('/withdraw-status/:uuid', async (req, res) => {
 
 app.post('/phone-verification/verify', async (req, res) => {
   try {
-    console.log('[PHONE-VERIFY] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/phone-verification/verify`, req.body, { headers: marzHeaders });
-    console.log('[PHONE-VERIFY] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[PHONE-VERIFY]', e.message, e.response?.data);
     res.json(e.response?.data ?? { success: false, message: e.message });
   }
 });
@@ -237,24 +239,18 @@ app.get('/bill-payment/gotv/bouquet-codes', async (_, res) => {
 
 app.post('/bill-payment/verify', async (req, res) => {
   try {
-    console.log('[BILL-VERIFY] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/bill-payment/verify`, req.body, { headers: marzHeaders });
-    console.log('[BILL-VERIFY] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[BILL-VERIFY]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
 
 app.post('/bill-payment', async (req, res) => {
   try {
-    console.log('[BILL-PAY] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/bill-payment`, req.body, { headers: marzHeaders });
-    console.log('[BILL-PAY] Response:', JSON.stringify(r.data));
     res.json(r.data);
   } catch (e) {
-    console.error('[BILL-PAY]', e.message, e.response?.data);
     res.json(e.response?.data ?? { status: 'error', message: e.message });
   }
 });
@@ -334,10 +330,8 @@ app.get('/bank-transfer/:reference', async (req, res) => {
 app.get('/marzpay/airtime/catalog', async (_, res) => {
   try {
     const r = await axios.get(`${MARZPAY_BASE}/airtime-data/catalog`, { headers: marzHeaders });
-    console.log('[AIRTIME-CATALOG] status:', r.data?.status);
     res.json(r.data);
   } catch (e) {
-    console.error('[AIRTIME-CATALOG]', e.message, e.response?.data);
     res.status(e.response?.status ?? 502).json(
       e.response?.data ?? { status: 'error', message: e.message }
     );
@@ -347,13 +341,10 @@ app.get('/marzpay/airtime/catalog', async (_, res) => {
 // POST /marzpay/airtime/purchase  →  POST /airtime-data
 app.post('/marzpay/airtime/purchase', async (req, res) => {
   try {
-    console.log('[AIRTIME-PURCHASE] Request:', JSON.stringify(req.body));
     const r = await axios.post(`${MARZPAY_BASE}/airtime-data`, req.body, { headers: marzHeaders });
-    console.log('[AIRTIME-PURCHASE] Response status:', r.status, '| data status:', r.data?.status);
     // MarzPay returns 202 for pending Airtel data bundles — forward the real HTTP status
     res.status(r.status).json(r.data);
   } catch (e) {
-    console.error('[AIRTIME-PURCHASE]', e.message, e.response?.data);
     res.status(e.response?.status ?? 502).json(
       e.response?.data ?? { status: 'error', message: e.message }
     );
@@ -367,10 +358,8 @@ app.get('/marzpay/airtime/status/:reference', async (req, res) => {
   try {
     const url = `${MARZPAY_BASE}/airtime-data/${req.params.reference}?_t=${Date.now()}`;
     const r = await axios.get(url, { headers: { ...marzHeaders, 'Cache-Control': 'no-cache, no-store' } });
-    console.log('[AIRTIME-STATUS]', req.params.reference, '→', r.data?.data?.status);
     res.json(r.data);
   } catch (e) {
-    console.error('[AIRTIME-STATUS]', e.message, e.response?.data);
     res.status(e.response?.status ?? 502).json(
       e.response?.data ?? { status: 'error', message: e.message }
     );
@@ -384,7 +373,6 @@ app.get('/marzpay/airtime/detect-network', async (req, res) => {
     const r = await axios.get(`${MARZPAY_BASE}/airtime-data/detect-network?msisdn=${msisdn}`, { headers: marzHeaders });
     res.json(r.data);
   } catch (e) {
-    console.error('[AIRTIME-DETECT-NETWORK]', e.message, e.response?.data);
     res.status(e.response?.status ?? 502).json(
       e.response?.data ?? { status: 'error', message: e.message }
     );
@@ -408,12 +396,10 @@ app.get('/forex/rates', async (req, res) => {
 
   // Serve cached rates if fresh
   if (forexCache[base] && (now - forexCache[base].fetchedAt) < FOREX_CACHE_TTL) {
-    console.log(`[FOREX] Serving cached rates for ${base}`);
     return res.json({ status: 'success', base, rates: forexCache[base].rates, cached: true });
   }
 
   try {
-    console.log(`[FOREX] Fetching live rates for ${base}`);
     const r = await axios.get(`https://open.er-api.com/v6/latest/${base}`, { timeout: 8000 });
     if (r.data?.result === 'success') {
       forexCache[base] = { rates: r.data.rates, fetchedAt: now };
@@ -421,7 +407,6 @@ app.get('/forex/rates', async (req, res) => {
     }
     throw new Error('Unexpected response from exchange rate API');
   } catch (e) {
-    console.error('[FOREX]', e.message);
     // Return stale cache if available, else error
     if (forexCache[base]) {
       return res.json({ status: 'success', base, rates: forexCache[base].rates, cached: true, stale: true });
@@ -489,7 +474,6 @@ app.post('/ai/chat', async (req, res) => {
     const reply = r.data.choices?.[0]?.message?.content ?? '';
     res.json({ reply });
   } catch (e) {
-    console.error('[AI-CHAT]', e.message, e.response?.data);
     res.status(e.response?.status ?? 502).json({
       error: e.response?.data?.error?.message ?? e.message,
     });
@@ -546,4 +530,6 @@ app.post('/send-sms', async (req, res) => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`SACCOPLUS Pro Proxy v2.2.0 running on port ${PORT} — markets: UG KE RW CD ZM CM BJ CI GA CG SN SL + SMS`));
+app.listen(PORT, () => {
+  // Server started - logging minimized for security
+});
