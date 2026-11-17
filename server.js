@@ -16,21 +16,13 @@ if (!MARZPAY_AUTH) {
   process.exit(1);
 }
 
-// Proxy keys come ONLY from the environment now (no hardcoded fallbacks).
-// PROXY_KEY can hold several keys separated by commas, e.g.
-//   PROXY_KEY=new_key_here,old_key_still_used_by_old_apps
-const PROXY_KEYS = new Set(
-  (process.env.PROXY_KEY || '')
-    .split(',')
-    .map(k => k.trim())
-    .filter(Boolean)
-);
-
-if (PROXY_KEYS.size === 0) {
-  console.error('❌ PROXY_KEY is not set in environment variables!');
-  console.error('   Set it (comma-separated for multiple keys) in .env or your host dashboard');
-  process.exit(1);
-}
+// Accept BOTH the old key (rutooma_agro_2025_proxy_key) and the new SACCOPLUS key
+// so existing installs keep working while new ones use the new key
+const PROXY_KEYS    = new Set([
+  process.env.PROXY_KEY || 'saccoplus_pro_2025_proxy_key',
+  'rutooma_agro_2025_proxy_key',   // legacy — old app versions
+  'saccoplus_pro_2025_proxy_key',  // new app versions
+]);
 
 // ── Request logging (so you can see what actually reaches the proxy) ─────────
 app.use((req, res, next) => {
@@ -51,8 +43,6 @@ app.use((req, res, next) => {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   // Skip auth for health check, root, and SMS endpoint
-  // NOTE: /send-sms is open so anyone with your proxy URL can call it.
-  // Remove it from this list once your callers send the X-Proxy-Key header.
   if (req.path === '/health' || req.path === '/' || req.path === '/send-sms') {
     return next();
   }
@@ -493,23 +483,13 @@ app.post('/ai/chat', async (req, res) => {
 // SMS SENDING — EgoSMS API (for OTP and notifications)
 // POST /send-sms  { phone, message, sender? }
 // Bypasses CORS restrictions for web app SMS sending
-// Credentials now come ONLY from environment variables:
-//   EGOSMS_USERNAME, EGOSMS_PASSWORD
 // ════════════════════════════════════════════════════════════════════════════
 
-const EGOSMS_USERNAME = process.env.EGOSMS_USERNAME;
-const EGOSMS_PASSWORD = process.env.EGOSMS_PASSWORD;
+const EGOSMS_USERNAME = process.env.EGOSMS_USERNAME || 'INFINITECH';
+const EGOSMS_PASSWORD = process.env.EGOSMS_PASSWORD || 'Moses,123##';
 
 app.post('/send-sms', async (req, res) => {
   try {
-    if (!EGOSMS_USERNAME || !EGOSMS_PASSWORD) {
-      console.log('[SMS] EGOSMS_USERNAME / EGOSMS_PASSWORD not set');
-      return res.status(503).json({
-        success: false,
-        error: 'SMS service not configured'
-      });
-    }
-
     const { phone, message, sender = 'MBADIFA' } = req.body;
 
     if (!phone || !message) {
@@ -540,7 +520,6 @@ app.post('/send-sms', async (req, res) => {
       });
     }
   } catch (e) {
-    console.log('[SMS] Error:', e.message);
     return res.status(500).json({
       success: false,
       error: 'SMS service error'
